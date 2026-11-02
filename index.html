@@ -26,6 +26,16 @@ main{max-width:1100px;margin:0 auto}
 .offers{margin-top:12px;display:grid;gap:8px}
 .offer{background:var(--offer-bg);border:1px solid var(--offer);border-radius:8px;padding:8px 12px}
 .offer b{color:var(--offer)}
+button.offer{font:inherit;color:var(--fg);text-align:left;cursor:pointer;width:100%}
+button.offer[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--offer)}
+.pk{background:var(--panel);border:2px solid var(--offer);border-radius:8px;padding:10px 12px}
+.pk .hd{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pk .hd b{color:var(--offer);font-size:16px}
+.pk ul{margin:6px 0;padding-left:18px;color:var(--fg)}
+.pk .pp{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pk .pp .now{font-size:20px;font-weight:700;color:var(--offer);font-variant-numeric:tabular-nums}
+.pk button{font:inherit;font-weight:600;border:1px solid var(--offer);background:var(--offer);color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer}
+.pk button.on{background:none;color:var(--offer)}
 .cnt{color:var(--muted);font-size:12px;margin:12px 0 6px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .cnt .sp{flex:1}
 .grp{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:14px 0 4px}
@@ -83,9 +93,9 @@ footer{color:var(--muted);font-size:12px;margin-top:20px}
 </header>
 <main>
   <div class="offers" id="offers"></div>
-  <div class="cnt"><span id="cnt"></span><span class="sp"></span><label><input type="checkbox" id="onlysel"> Show ticked only</label></div>
+  <div class="cnt"><span id="cnt"></span><span class="sp"></span><label><input type="checkbox" id="onlyoff"> On offer only</label><label><input type="checkbox" id="onlysel"> Show ticked only</label></div>
   <div id="list"></div>
-  <footer>Prices in Iraqi dinar. The date above says which price list this is. Offer prices apply only between the dates shown and only in the branch selected. Tick products to add them up.</footer>
+  <footer>Prices in Iraqi dinar. The date above says which price list this is. Offer prices apply only between the dates shown and only in the branch selected; offers disappear by themselves after their end date. Tick products to add them up.</footer>
 </main>
 <div class="basket" id="basket" hidden>
   <span class="lbl" id="bcount"></span>
@@ -99,7 +109,7 @@ footer{color:var(--muted);font-size:12px;margin-top:20px}
 const $=s=>document.querySelector(s);const fmt=n=>Math.round(n).toLocaleString('en-US');
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const BRAND={Enza:'Enza Home',Yatas:'Yataş Bedding'};
-let D=null,P=[],branch=null,offerMap={},basket={};
+let D=null,P=[],branch=null,offerMap={},basket={},pkgs={},offF='';
 const TYPE=new Set(['base','headboard','mattress','topper','pillow','quilt','duvet','sheet','protector','blanket','bedspread','towel','bathrobe','cover','sofa','armchair','corner','ottoman','recliner','module','daybed','table','chair','bench','bookcase','carpet','rug','lamp','lighting','accessory','tv','unit','wardrobe','bed','dresser','mirror','nightstand','sideboard','console','bedroom','dining','textile','upholstery','panel','complementary','seat']);
 const CATW=new Set(['lighting','carpet','accessory','complementary']);
 let CW=new Set(),AMB=new Set();
@@ -119,24 +129,33 @@ function parse(words,pool){const gs=[];let cur=null;
     cur.rest.push(w);});
   return gs;}
 function itemHtml(p){const o=offerMap[p.k],on=basket[p.k];
-  return `<div class="item ${on?'on':''}" data-k="${esc(p.k)}"><input type="checkbox" ${on?'checked':''} aria-label="Add to total"><div><div class="name">${esc(p.name)}${p.av&&p.av!=='Available'?`<span class="tag">${esc(p.av)}</span>`:''}${o?`<span class="tag o">${esc(o.name)}</span>`:''}</div><div class="sub">${esc([p.v1,p.v2].filter(Boolean).join(' · '))}${p.code?' · '+esc(p.code):''}</div></div>
+  return `<div class="item ${on?'on':''}" data-k="${esc(p.k)}"><input type="checkbox" ${on?'checked':''} aria-label="Add to total"><div><div class="name">${esc(p.name)}${p.av&&p.av!=='Available'?`<span class="tag">${esc(p.av)}</span>`:''}${o?`<span class="tag o">−${o.pct}% · ${esc(o.name)} · until ${esc(o.end)}</span>`:''}</div><div class="sub">${esc([p.v1,p.v2].filter(Boolean).join(' · '))}${p.code?' · '+esc(p.code):''}</div></div>
     <div class="price">${o?`<span class="was">${fmt(p.price)}</span><span class="op">${fmt(o.price)}</span>`:fmt(p.price)}</div>
     ${on?`<div class="qty"><button data-d="-1" aria-label="Less">−</button><span>${on} × ${fmt(priceOf(p))} = <b>${fmt(on*priceOf(p))}</b></span><button data-d="1" aria-label="More">+</button>${p.low&&!o?`<span class="disc">Max ${Math.round(p.disc*100)}% · lowest ${fmt(p.low)} each</span>`:''}</div>`:''}</div>`;}
 let toastT=null;function toast(m){let t=$('.toast');if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);}t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2000);}
 function today(){return new Date().toISOString().slice(0,10);}
 function fill(sel,vals,first){const v=sel.value;sel.innerHTML=`<option value="">${first}</option>`+vals.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if(vals.includes(v))sel.value=v;}
 function priceOf(p){const o=offerMap[p.k];return o?o.price:p.price;}
+const dShort=s=>{const d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});};
 function setBranch(slug,push){branch=D.branches.find(b=>b.slug===slug)||D.branches[0];
   document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.slug===branch.slug)));
   if(push){try{history.replaceState(null,'','#'+branch.slug);}catch(e){}}
-  const t=today();offerMap={};const act=(branch.offers||[]).filter(o=>o.start<=t&&t<=o.end);act.forEach(o=>o.items.forEach(i=>{offerMap[i.k]={name:o.name,price:i.price};}));
-  $('#offers').innerHTML=act.map(o=>`<div class="offer"><b>${esc(o.name)}</b> · ${o.start} to ${o.end} · ${o.items.length} products</div>`).join('');
+  const t=today();offerMap={};pkgs={};offF='';const act=(branch.offers||[]).filter(o=>o.start<=t&&t<=o.end);
+  // Offers end by themselves: only offers whose dates include today are shown.
+  act.forEach(o=>{if(o.type==='package'){pkgs[o.id]=o;return;}(o.items||[]).forEach(i=>{const p=P.find(x=>x.k===i.k);if(p&&i.price<p.price&&(!offerMap[i.k]||i.price<offerMap[i.k].price))offerMap[i.k]={id:o.id,name:o.name,price:i.price,end:dShort(o.end),pct:Math.round((1-i.price/p.price)*100)};});});
+  renderOffers();
   const brands=branch.brands;$('#brand').innerHTML=(brands.length>1?'<option value="">All brands</option>':'')+brands.map(b=>`<option value="${b}">${BRAND[b]}</option>`).join('');
   $('#meta').textContent=`${branch.name} · prices as of ${D.built}`;
   try{localStorage.setItem('branch',branch.slug);}catch(e){}
   render();renderBasket();}
-function render(){const q=$('#q').value.trim().toLowerCase(),b=$('#brand').value,only=$('#onlysel').checked;
-  const base=P.filter(p=>branch.brands.includes(p.b)&&(!b||p.b===b));fill($('#cat'),[...new Set(base.map(p=>p.cat))].sort(),'All categories');
+function renderOffers(){const ds=Object.values((branch.offers||[]).filter(o=>o.type!=='package'&&o.start<=today()&&today()<=o.end).reduce((a,o)=>(a[o.id]=o,a),{}));
+  $('#offers').innerHTML=ds.map(o=>`<button class="offer" data-of="${esc(o.id)}" aria-pressed="${offF===o.id}"><b>${esc(o.name)}</b> · until ${esc(dShort(o.end))} · ${Object.values(offerMap).filter(x=>x.id===o.id).length} products${offF===o.id?' · showing only this offer (tap again for all)':' · tap to see them'}</button>`).join('')+
+    Object.values(pkgs).map(o=>{const on=basket['pkg:'+o.id];return `<div class="pk"><div class="hd"><b>${esc(o.name)}</b><span class="sub">Package · until ${esc(dShort(o.end))}</span></div><ul>${o.pkg.items.map(i=>`<li>${i.qty>1?i.qty+' × ':''}${esc(i.name)}${i.v?` <span class="sub">${esc(i.v)}</span>`:''}</li>`).join('')}</ul>
+      <div class="pp"><span class="was">${fmt(o.pkg.total)}</span><span class="now">${fmt(o.pkg.price)} IQD</span><span class="sub">save ${fmt(o.pkg.total-o.pkg.price)}</span><span style="flex:1"></span><button data-pk="${esc(o.id)}" class="${on?'on':''}">${on?'Remove from total':'Add to total'}</button></div></div>`;}).join('');}
+$('#offers').addEventListener('click',e=>{const b=e.target.closest('[data-of]');if(b){offF=offF===b.dataset.of?'':b.dataset.of;renderOffers();render();return;}
+  const k=e.target.closest('[data-pk]');if(k){const id='pkg:'+k.dataset.pk;if(basket[id])delete basket[id];else basket[id]=1;renderOffers();renderBasket();}});
+function render(){const q=$('#q').value.trim().toLowerCase(),b=$('#brand').value,only=$('#onlysel').checked,oo=$('#onlyoff').checked;
+  const base=P.filter(p=>branch.brands.includes(p.b)&&(!b||p.b===b)&&(!p.br||p.br.includes(branch.slug))&&(!p.only||(p.only.includes(branch.slug)&&offerMap[p.k]))&&(!oo||offerMap[p.k])&&(!offF||(offerMap[p.k]&&offerMap[p.k].id===offF)));fill($('#cat'),[...new Set(base.map(p=>p.cat))].sort(),'All categories');
   const c=$('#cat').value;const base2=base.filter(p=>!c||p.cat===c);fill($('#coll'),[...new Set(base2.map(p=>p.coll))].sort(),'All collections');
   const coll=$('#coll').value;
   const norm=s=>s.replace(/\bthree\b/g,'3').replace(/\btwo\b/g,'2').replace(/\bone\b/g,'1').replace(/\bseater\b/g,'seat').replace(/(\d)\s*-\s*seat/g,'$1 seat');
@@ -157,20 +176,20 @@ function render(){const q=$('#q').value.trim().toLowerCase(),b=$('#brand').value
     $('#cnt').textContent=tot+' products · '+gs.length+' items searched';}
   $('#list').innerHTML=html;}
 function renderBasket(){const ks=Object.keys(basket);const bk=$('#basket');if(!ks.length){bk.hidden=true;return;}bk.hidden=false;
-  let tot=0,n=0;ks.forEach(k=>{const p=P.find(x=>x.k===k);if(p){tot+=basket[k]*priceOf(p);n+=basket[k];}});
+  let tot=0,n=0;ks.forEach(k=>{if(k.startsWith('pkg:')){const o=pkgs[k.slice(4)];if(o){tot+=basket[k]*o.pkg.price;n+=basket[k];}return;}const p=P.find(x=>x.k===k);if(p){tot+=basket[k]*priceOf(p);n+=basket[k];}});
   $('#bcount').textContent=`${ks.length} product${ks.length>1?'s':''} · ${n} unit${n>1?'s':''}`;$('#btotal').textContent=fmt(tot)+' IQD';}
 $('#list').addEventListener('click',e=>{const d=e.target.closest('button[data-d]');const it=e.target.closest('.item');if(!it)return;const k=it.dataset.k;
   if(d){e.preventDefault();basket[k]=(basket[k]||1)+ (+d.dataset.d);if(basket[k]<=0)delete basket[k];}
   else{if(basket[k])delete basket[k];else basket[k]=1;}
   render();renderBasket();});
-$('#bclear').addEventListener('click',()=>{basket={};render();renderBasket();});
-$('#bcopy').addEventListener('click',()=>{const lines=Object.keys(basket).map(k=>{const p=P.find(x=>x.k===k);return p?`${basket[k]} × ${p.name} ${[p.v1,p.v2].filter(Boolean).join(' ')} — ${fmt(basket[k]*priceOf(p))} IQD`:'';}).filter(Boolean);
+$('#bclear').addEventListener('click',()=>{basket={};render();renderOffers();renderBasket();});
+$('#bcopy').addEventListener('click',()=>{const lines=Object.keys(basket).map(k=>{if(k.startsWith('pkg:')){const o=pkgs[k.slice(4)];return o?`${basket[k]} × ${o.name} (package) — ${fmt(basket[k]*o.pkg.price)} IQD`:'';}const p=P.find(x=>x.k===k);return p?`${basket[k]} × ${p.name} ${[p.v1,p.v2].filter(Boolean).join(' ')} — ${fmt(basket[k]*priceOf(p))} IQD`:'';}).filter(Boolean);
   const txt=lines.join('\n')+'\nTotal: '+$('#btotal').textContent;
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast('Copied'),()=>toast('Could not copy'));}else toast('Could not copy');});
-['#q','#brand','#cat','#coll','#onlysel'].forEach(s=>$(s).addEventListener(s==='#q'?'input':'change',render));
+['#q','#brand','#cat','#coll','#onlysel','#onlyoff'].forEach(s=>$(s).addEventListener(s==='#q'?'input':'change',render));
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-slug]');if(b){basket={};setBranch(b.dataset.slug,true);}});
 window.addEventListener('hashchange',()=>{const h=location.hash.replace('#','');if(D&&D.branches.some(b=>b.slug===h))setBranch(h,false);});
-function start(d){D=d;P=d.products.map(p=>({...p,s:(p.name+' '+p.coll+' '+p.cat+' '+p.code+' '+p.v1+' '+p.v2).toLowerCase().replace(/\bseater\b/g,'seat'),n:(p.name+' '+p.coll).toLowerCase()}));
+function start(d){D=d;const X={};(d.branches||[]).forEach(b=>(b.offers||[]).forEach(o=>(o.extra||[]).forEach(p=>{(X[p.k]=X[p.k]||{...p,only:[]}).only.push(b.slug);})));P=d.products.concat(Object.values(X)).map(p=>({...p,s:(p.name+' '+p.coll+' '+p.cat+' '+p.code+' '+p.v1+' '+p.v2).toLowerCase().replace(/\bseater\b/g,'seat'),n:(p.name+' '+p.coll).toLowerCase()}));
   const tk=x=>String(x||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),vc={};P.forEach(p=>tk(p.v1+' '+p.v2).forEach(w=>{vc[w]=(vc[w]||0)+1;}));
   P.forEach(p=>tk(p.coll).forEach(w=>{if(w.length>1&&!TYPE.has(w)&&!/^\d+$/.test(w)){CW.add(w);if(vc[w]>=3)AMB.add(w);}}));
   $('#tabs').innerHTML=d.branches.map(b=>`<button role="tab" data-slug="${b.slug}" aria-selected="false">${esc(b.name)}</button>`).join('');
